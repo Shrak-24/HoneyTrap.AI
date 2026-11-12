@@ -19,7 +19,8 @@ class Config:
 
     SECRET_KEY = _env('SECRET_KEY', '')
 
-    GEMINI_API_KEY = _env('GEMINI_API_KEY', '')
+    # Allow a local override while rotating a key without changing source code.
+    GEMINI_API_KEY = _env('GEMINI_API_KEY_OVERRIDE', _env('GEMINI_API_KEY', ''))
 
     # Optional: shared secret for Cowrie webhook auth (ISSUE-6)
     COWRIE_WEBHOOK_SECRET = _env('COWRIE_WEBHOOK_SECRET', '')

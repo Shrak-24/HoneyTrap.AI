@@ -11,12 +11,36 @@ api_bp = Blueprint('api_bp', __name__)
 # Simple in-memory cache so we don't hammer ip-api.com
 _geo_cache: dict = {}
 
+# Locations for demo attackers created by seed.py. These are simulated values
+# so offline demos do not depend on an external geo-IP service.
+_DEMO_GEO = {
+    '185.220.101.42': ('Frankfurt', 'Hesse', 'Germany', 'DE', 'Simulated Tor exit', True, True),
+    '91.108.4.211': ('Amsterdam', 'North Holland', 'Netherlands', 'NL', 'Simulated hosting provider', False, True),
+    '45.142.212.100': ('Bucharest', 'Bucharest', 'Romania', 'RO', 'Simulated VPS provider', False, True),
+    '103.55.38.201': ('Singapore', 'Singapore', 'Singapore', 'SG', 'Simulated cloud network', False, True),
+    '178.128.23.11': ('London', 'England', 'United Kingdom', 'GB', 'Simulated cloud network', True, True),
+    '5.188.86.172': ('Moscow', 'Moscow', 'Russia', 'RU', 'Simulated hosting provider', False, True),
+    '162.55.196.130': ('Berlin', 'Berlin', 'Germany', 'DE', 'Simulated VPS provider', False, True),
+    '80.211.206.105': ('Warsaw', 'Masovian Voivodeship', 'Poland', 'PL', 'Simulated hosting provider', False, True),
+    '192.168.10.55': ('Private network', 'Local segment', 'Internal', '', 'Simulated internal host', False, False),
+    '77.247.108.222': ('Amsterdam', 'North Holland', 'Netherlands', 'NL', 'Simulated botnet node', True, True),
+}
+
 
 @api_bp.route('/geo/<ip>', methods=['GET'])
 def geo_lookup(ip):
     """Proxy ip-api.com geolocation for an IP address. Cached in-memory."""
     if ip in _geo_cache:
         return jsonify({"status": "success", "data": _geo_cache[ip]}), 200
+    if ip in _DEMO_GEO:
+        city, region, country, country_code, org, proxy, hosting = _DEMO_GEO[ip]
+        data = {
+            "status": "success", "city": city, "regionName": region,
+            "country": country, "countryCode": country_code, "isp": org,
+            "org": org, "proxy": proxy, "hosting": hosting, "simulated": True,
+        }
+        _geo_cache[ip] = data
+        return jsonify({"status": "success", "data": data}), 200
     try:
         fields = "status,country,countryCode,regionName,city,isp,org,as,proxy,hosting"
         url = f"https://ip-api.com/json/{ip}?fields={fields}"

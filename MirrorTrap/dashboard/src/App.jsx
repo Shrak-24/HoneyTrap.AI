@@ -634,7 +634,7 @@ function VictimsBoard({ allVictims, summary, sessions }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
 
         {/* Victim cards */}
         <div>
@@ -663,15 +663,15 @@ function VictimsBoard({ allVictims, summary, sessions }) {
                   </div>
                 )}
                 <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
-                  <span className="tool-chip" style={{ fontSize: 10 }}>
+                  <span className="tool-chip victim-chip" style={{ fontSize: 10 }}>
                     {(v.attack_vector || '—').replace(/_/g, ' ')}
                   </span>
-                  <span className="tool-chip" style={{ fontSize: 10, background: 'var(--bg-2)' }}>
+                  <span className="tool-chip victim-chip" style={{ fontSize: 10, background: 'var(--bg-2)' }}>
                     {sessionLabel(v.session_id)}
                   </span>
                 </div>
                 {v.data_accessed && (
-                  <div style={{ gridColumn: '1 / -1', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, marginTop: 4, fontStyle: 'italic' }}>
+                  <div className="victim-description" style={{ gridColumn: '1 / -1', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, marginTop: 4, fontStyle: 'italic' }}>
                     {v.data_accessed}
                   </div>
                 )}
@@ -712,21 +712,23 @@ function VictimsBoard({ allVictims, summary, sessions }) {
 
 function useGeo(ip) {
   const [geo, setGeo] = useState(null)
+  const [failed, setFailed] = useState(false)
   useEffect(() => {
-    if (!ip) { setGeo(null); return }
+    if (!ip) { setGeo(null); setFailed(false); return }
     setGeo(null)
+    setFailed(false)
     fetch(`/api/geo/${ip}`)
       .then(r => r.json())
-      .then(d => { if (d.status === 'success') setGeo(d.data) })
-      .catch(() => {})
+      .then(d => { if (d.status === 'success') setGeo(d.data); else setFailed(true) })
+      .catch(() => setFailed(true))
   }, [ip])
-  return geo
+  return { geo, failed }
 }
 
 // ── Attacker Report Panel ─────────────────────────────────────────────────────
 
 function AttackerReport({ session, sessionLogs, activity, actLoading, onCopy, victims, vicLoading }) {
-  const geo = useGeo(session?.source_ip)
+  const { geo, failed: geoFailed } = useGeo(session?.source_ip)
 
   if (!session) {
     return (
@@ -821,7 +823,9 @@ function AttackerReport({ session, sessionLogs, activity, actLoading, onCopy, vi
               {!geo && session.source_ip && (
                 <div className="report-field">
                   <div className="report-label">Location</div>
-                  <div className="report-value" style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Resolving…</div>
+                  <div className="report-value" style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    {geoFailed ? 'Unavailable' : 'Resolving…'}
+                  </div>
                 </div>
               )}
             </div>
@@ -1182,7 +1186,15 @@ export default function App() {
   const [selectedId, setSelectedId]   = useState(null)
   const [refreshing, setRefreshing]   = useState(false)
   const [view, setView]               = useState('attackers')  // 'attackers' | 'victims'
+  const [theme, setTheme]               = useState(() => {
+    try { return localStorage.getItem('mirrortrap-theme') || 'dark' } catch { return 'dark' }
+  })
   const { toasts, push: toast }       = useToast()
+
+  useEffect(() => {
+    try { localStorage.setItem('mirrortrap-theme', theme) } catch { /* storage unavailable */ }
+    document.body.dataset.theme = theme
+  }, [theme])
 
   const selectedSession = sessions.find(s => s.session_id === selectedId) || null
   const { activity, loading: actLoading } = useActivity(selectedSession)
@@ -1212,7 +1224,9 @@ export default function App() {
   )
 
   return (
-    <div className="layout">
+    <div className={`layout ${view === 'victims' ? 'layout-victims' : ''} theme-${theme}`}>
+
+      <div className="promo-strip">YOUR DATA, FULLY PROTECTED — ANYTIME, ANYWHERE · SECURE DEMO MODE →</div>
 
       {/* Topbar */}
       <header className="topbar">
@@ -1264,6 +1278,15 @@ export default function App() {
           </div>
           <div className="topbar-divider" />
           <div className="topbar-actions">
+            <button
+              className="theme-toggle"
+              onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            >
+              <span className="theme-toggle-track"><span className="theme-toggle-thumb">{theme === 'dark' ? '☾' : '☀'}</span></span>
+              <span className="theme-toggle-label">{theme === 'dark' ? 'Dark' : 'Light'}</span>
+            </button>
             <button className="icon-btn" onClick={handleRefresh} title="Refresh now">
               <Icons.Refresh />
             </button>
@@ -1271,8 +1294,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* Stats Bar */}
-      <StatsBar sessions={sessions} allLogs={allLogs} />
+      {/* Global attack stats are relevant to the attacker view only. */}
+      {view === 'attackers' && <StatsBar sessions={sessions} allLogs={allLogs} />}
 
       {/* Main Grid */}
       {view === 'victims' ? (
@@ -1323,7 +1346,7 @@ export default function App() {
       )}
 
       {/* Auto-refresh bar */}
-      <div style={{ position: 'fixed', top: 106, left: 0, right: 0, zIndex: 20 }}>
+      <div className="refresh-bar-fixed" style={{ position: 'fixed', top: view === 'victims' ? 82 : 154, left: 0, right: 0, zIndex: 20 }}>
         <AutoRefreshBar lastRefresh={lastRefresh} onRefresh={handleRefresh} />
       </div>
 
